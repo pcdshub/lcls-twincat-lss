@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <POU Name="FB_ALPHA215C_Multiplex" Id="{0f0eb6b3-e274-4be2-b734-0d5f207bdfb1}" SpecialFunc="None">
-    <Declaration><![CDATA[FUNCTION_BLOCK FB_ALPHA215C_Multiplex EXTENDS FB_Alpha215C
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_ALPHA215C_Multiplex
 (*This FB Add Messages to sign and cycle though multiple messages. Idealy One FB per Sign. 
 Otherwise some messages will display longer in some signs.
 
@@ -14,6 +14,7 @@ VAR_INPUT
 END_VAR
 VAR_IN_OUT
 	aMessages : ARRAY [*] OF E_ALPHA_MULTIPLEX_ITEM;
+	aAlphaDriver : FB_Alpha215C;
 END_VAR
 VAR
 	iCurrentItem : DINT :=  LOWER_BOUND(aMessages,1);
@@ -24,7 +25,7 @@ VAR
 END_VAR
 ]]></Declaration>
     <Implementation>
-      <ST><![CDATA[SUPER^();
+      <ST><![CDATA[aAlphaDriver();
 
 tTimer(IN:=TRUE);
 
@@ -33,7 +34,7 @@ CASE iMultiplexState OF
 		stItem := aMessages[iCurrentItem];
 		
 		IF stItem.bActive THEN
-			SUPER^.M_Print(sAddress := stItem.sAddress,
+			aAlphaDriver.M_Print(sAddress := stItem.sAddress,
 				iFile := stItem.sFile, 
 				sMessage := stItem.sMessage
 			);
