@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <DUT Name="E_ALPHA_LED_LINE_POSITION" Id="{c0c654a6-9189-4a3e-813e-3d887f5c6cb1}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'strict'}
+{attribute 'to_string'}
+TYPE E_ALPHA_LED_LINE_POSITION :
+(
+	MIDDLE_LINE := 0 	// — Text centered vertically
+	(*
+	TOP_LINE, 			(*— Text begins on the top line of the sign and the sign will use all its lines minus 1 in order
+						to display the text. For example, a 6-line sign will allow a maximum of 5 lines (6 minus 1) for the Top
+						Position. The Top/Bottom Line break will remain fixed until the next Middle or Fill position is
+						specified*)
+	BOTTOM_LINE, 		(* — The starting position of the Bottom Line(s) immediately follows the last line of the
+						Top Line. For example, a 6-line sign with 3 lines of text associated with the Top Line would start the
+						Bottom Line text on the 4th line of the sign. *)
+						
+	FILL				(*he sign will fill all available lines, centering the lines vertically*)
+	*)
+);
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>
