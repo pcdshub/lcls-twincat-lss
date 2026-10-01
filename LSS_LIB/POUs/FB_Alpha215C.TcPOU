@@ -1,0 +1,193 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_Alpha215C" Id="{bf5a96f5-4bee-4cf1-9220-3934c6995b7d}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Alpha215C
+(*This FB can be used to send print commands to the ALpha Signs*)
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	fbBackgroundSerialLine: SerialLineControl;
+	RxBuffer:   ComBuffer;
+    TxBuffer:   ComBuffer;
+
+	// Link to hardware.
+	stComIn		AT %I*	:	EL6inData22B (*KL6inData22B*);
+    stComOut	AT %Q*	:	EL6outData22B (*KL6outData22B*);
+
+	//sCommand : STRING := '';  // (sCommand = sCommandCode + sDataField) + sCommand // NESTING commands
+	//sSendMessage : STRING := '_00_00_00_00_00_01Z00_02A0_1Ba_1A9_1C1NO ACCESS_04';
+
+	bBackgroundComError: BOOL;
+	bBackgroundErrorId: UINT;
+	bBackgroundTaskRunning : BOOL;
+
+	fbClearComBuffer		: ClearComBuffer;
+    fbSendString			: SendString;
+    fbReceiveString			: ReceiveString;
+
+	sSendPacket : STRING := '';
+
+	bExecuteSend : BOOL := FALSE;
+	iState : UINT := 0;
+
+	fbRingBuff : FB_StringRingBuffer;
+	fbBufferMemory    : ARRAY[0..2048] OF BYTE;
+	
+	tTimer : TON;
+
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[fbRingBuff(pBuffer := ADR(fbBufferMemory), cbBuffer := SIZEOF(fbBufferMemory));
+tTimer(IN:=TRUE, PT:= T#100MS);
+
+CASE iState OF
+	0:
+		IF bExecuteSend THEN // Manual Send
+			fbSendString.SendString := sSendPacket;
+			fbClearComBuffer(Buffer:=TxBuffer);
+			iState := 10;
+		END_IF
+
+		IF fbRingBuff.nCount > 0 THEN // Send w/ ring buffer
+			fbRingBuff.A_RemoveHead();
+			sSendPacket := fbRingBuff.getValue;
+			fbSendString.SendString := sSendPacket;
+			fbClearComBuffer(Buffer:=TxBuffer);
+			iState := 10;
+		END_IF
+
+	10: // SEND PACKET
+
+		fbSendString(TXbuffer:=TxBuffer);
+
+		IF NOT fbSendString.Busy AND fbSendString.Error = 0 THEN
+			tTimer.IN := FALSE;
+			tTimer();
+			iState := 20;
+		END_IF
+		
+	20: // WAIT FOR NEXT MESSAGE TO SEND
+		IF tTimer.Q THEN
+			bExecuteSend := FALSE;
+			sSendPacket := '';
+			iState := 0;
+		END_IF
+
+END_CASE]]></ST>
+    </Implementation>
+    <Action Name="A_RUN_BACKGROUND_SERIAL_CONTROL" Id="{64ede1d8-a914-4956-a15d-7bdcb5c9b420}">
+      <Implementation>
+        <ST><![CDATA[
+bBackgroundTaskRunning := TRUE;
+
+fbBackgroundSerialLine(
+	Mode := ComSerialLineMode_t.SERIALLINEMODE_EL6_22B,
+	pComIn := ADR(stComIn),
+	pComOut := ADR(stComout),
+	SizeComIn:= UINT_TO_INT(SIZEOF(stComout)),
+    TxBuffer:= TxBuffer,
+    RxBuffer:= RxBuffer,
+	Error => bBackgroundComError,
+	ErrorID => bBackgroundErrorId);
+
+
+	]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_BUILD_PACKET" Id="{dba303e8-16b9-4849-969d-1a99d6a92317}">
+      <Declaration><![CDATA[METHOD PRIVATE M_BUILD_PACKET : STRING
+VAR_INPUT
+	sCommand : STRING;
+	sAddress : STRING;
+END_VAR
+VAR
+	sPacket : STRING := '';
+	// TRANSMISSION FORMAT: <NULL> <SOH> <TypeCode> <SignAdress> <STX> <CommandCode> <DataField> <EOT>
+
+	NULL : STRING := '_00_00_00_00_00';	(*A minimum of five <NUL>s (00H) must be transmitted as packet synchronization characters.
+											 Five <SOH>s (01H) may be substituted for the five <NUL>s.
+											 The sign uses these five characters to establish the baud rate *)
+
+	SOH : STRING := '_01';	// Start of Header
+	TYPE_CODE : STRING := 'Z';	// Set Type of Sign; 'Z' = All signs
+	STX : STRING :='_02'; 		//“Start of TeXt” (02H) character. <STX> always precedes a Command Code.
+	EOT : STRING:= '_04';		// "End of Transmission'
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[sPacket := CONCAT(sPacket, NULL);
+sPacket := CONCAT(sPacket, SOH);
+sPacket := CONCAT(sPacket, TYPE_CODE);
+sPacket := CONCAT(sPacket, sAddress);
+sPacket := CONCAT(sPacket, STX);
+sPacket := CONCAT(sPacket, sCommand);
+sPacket := CONCAT(sPacket, EOT);
+
+M_BUILD_PACKET := sPacket;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_BUILD_TEXT_WRITE_COMMAND" Id="{069902f9-dfeb-44e6-b488-a0dbc8dfdb04}">
+      <Declaration><![CDATA[METHOD PRIVATE M_BUILD_TEXT_WRITE_COMMAND : STRING
+VAR_INPUT
+	sMessage : STRING;
+	iFile : STRING := '0'; // print to priotiry file; so message shows up immediatly
+	eLinePos : E_ALPHA_LED_LINE_POSITION := E_ALPHA_LED_LINE_POSITION.MIDDLE_LINE;
+
+END_VAR
+VAR
+	COMMAND_CODE : STRING := 'A'; // A = WRITE TO 'FILE'
+	ESC : STRING := '_1B';
+	LINE_POS : STRING;
+	MODE_CODE : STRING := 'b_1C1'; // func that chains multiple codes? ; Holds Text in place (b); red color text (_1C1) - this can chain multiple codes.
+	SPECIAL_MODE : STRING := ''; // CAN ALSO BE ENUM
+	// A - WRITE
+	// 0 - FILE LABEL ;0 is Prority
+	// _1B - ESCAPE CHAR
+	// '' - LINE POSITION
+	// a - MODE CODE
+	// '' - SPECIAL MODE
+	// _1A9_1C1NO ACCESS - TEXT
+
+	sCommand : STRING;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE eLinePos OF
+	E_ALPHA_LED_LINE_POSITION.MIDDLE_LINE:
+		LINE_POS := ' ';
+END_CASE
+
+sCommand := CONCAT(sCommand, COMMAND_CODE);
+sCommand := CONCAT(sCommand, iFile);
+sCommand := CONCAT(sCommand, ESC);
+sCommand := CONCAT(sCommand, LINE_POS);
+sCommand := CONCAT(sCommand, MODE_CODE);
+sCommand := CONCAT(sCommand, SPECIAL_MODE);
+sCommand := CONCAT(sCommand, sMessage);
+
+M_BUILD_TEXT_WRITE_COMMAND := sCommand;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Print" Id="{97e0f65c-83b7-40dc-af6c-c8ce11024d2d}">
+      <Declaration><![CDATA[METHOD M_Print : BOOL
+VAR_INPUT
+	sAddress : STRING := '00'; // default broadcast to all
+	iFile : STRING := '0'; // Use Priority file to instantly send message to sign.
+	sMessage : STRING;
+END_VAR
+VAR
+	sCommand : STRING;
+	sPacket : STRING;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[sCommand := M_BUILD_TEXT_WRITE_COMMAND(sMessage, iFile);
+sPacket := M_BUILD_PACKET(sCommand, sAddress);
+
+fbRingBuff.putValue := sPacket;
+fbRingBuff.A_AddTail();]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>
