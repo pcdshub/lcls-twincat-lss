@@ -3,11 +3,11 @@
   <DUT Name="E_ALPHA_MULTIPLEX_ITEM" Id="{83b9fb32-1083-40b2-ae21-94f2f21e7115}">
     <Declaration><![CDATA[TYPE E_ALPHA_MULTIPLEX_ITEM :
 STRUCT
-	sMessage : STRING := ' ';
-	sAddress : STRING := '00'; // Display on all signs. Or Specific 
-	sFile	: STRING := '0'; // Sign Default configuration file 1; file 0 is priotiry 
-	tTime : TIME := T#1S; // How long message should display
-	bActive : BOOL := FALSE; // Message should be displayed.
+    sMessage : STRING := ' ';
+    sAddress : STRING := '00'; // Display on all signs. Or Specific
+    sFile	: STRING := '0'; // Sign Default configuration file 1; file 0 is priotiry
+    tTime : TIME := T#1S; // How long message should display
+    bActive : BOOL := FALSE; // Message should be displayed.
 END_STRUCT
 END_TYPE
 ]]></Declaration>

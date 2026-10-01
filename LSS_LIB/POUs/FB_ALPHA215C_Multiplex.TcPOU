@@ -2,7 +2,7 @@
 <TcPlcObject Version="1.1.0.1">
   <POU Name="FB_ALPHA215C_Multiplex" Id="{0f0eb6b3-e274-4be2-b734-0d5f207bdfb1}" SpecialFunc="None">
     <Declaration><![CDATA[FUNCTION_BLOCK FB_ALPHA215C_Multiplex
-(*This FB Add Messages to sign and cycle though multiple messages. Idealy One FB per Sign. 
+(*This FB Add Messages to sign and cycle though multiple messages. Idealy One FB per Sign.
 Otherwise some messages will display longer in some signs.
 
 st_message
@@ -13,51 +13,49 @@ st_message
 VAR_INPUT
 END_VAR
 VAR_IN_OUT
-	aMessages : ARRAY [*] OF E_ALPHA_MULTIPLEX_ITEM;
-	aAlphaDriver : FB_Alpha215C;
+    aMessages : ARRAY [*] OF E_ALPHA_MULTIPLEX_ITEM;
+    aAlphaDriver : FB_Alpha215C;
 END_VAR
 VAR
-	iCurrentItem : DINT :=  LOWER_BOUND(aMessages,1);
-	iMultiplexState : UINT := 10;
-	tTimer : TON;
-	stItem : E_ALPHA_MULTIPLEX_ITEM;
-	
+    iCurrentItem : DINT :=  LOWER_BOUND(aMessages,1);
+    iMultiplexState : UINT := 10;
+    tTimer : TON;
+    stItem : E_ALPHA_MULTIPLEX_ITEM;
+
 END_VAR
 ]]></Declaration>
     <Implementation>
-      <ST><![CDATA[aAlphaDriver();
-
-tTimer(IN:=TRUE);
+      <ST><![CDATA[tTimer(IN:=TRUE);
 
 CASE iMultiplexState OF
-	10: // START PRINTING
-		stItem := aMessages[iCurrentItem];
-		
-		IF stItem.bActive THEN
-			aAlphaDriver.M_Print(sAddress := stItem.sAddress,
-				iFile := stItem.sFile, 
-				sMessage := stItem.sMessage
-			);
-	
-			tTimer.PT := stItem.tTime;
-		ELSE
-			tTimer.PT := T#0S;
-		END_IF
-		
-		tTimer.IN := FALSE; // START TIMER
-		tTimer();
-		iMultiplexState := 20;
-		
-	20: // Wait
-		IF tTimer.Q THEN //
-			iCurrentItem := iCurrentItem + 1;
-			
-			IF iCurrentItem > UPPER_BOUND(aMessages, 1) THEN
-				iCurrentItem := LOWER_BOUND(aMessages,1);
-			END_IF
-			iMultiplexState := 10;
-		END_IF
-	
+    10: // START PRINTING
+        stItem := aMessages[iCurrentItem];
+
+        IF stItem.bActive THEN
+            aAlphaDriver.M_Print(sAddress := stItem.sAddress,
+                iFile := stItem.sFile,
+                sMessage := stItem.sMessage
+            );
+
+            tTimer.PT := stItem.tTime;
+        ELSE
+            tTimer.PT := T#0S;
+        END_IF
+
+        tTimer.IN := FALSE; // START TIMER
+        tTimer();
+        iMultiplexState := 20;
+
+    20: // Wait
+        IF tTimer.Q THEN //
+            iCurrentItem := iCurrentItem + 1;
+
+            IF iCurrentItem > UPPER_BOUND(aMessages, 1) THEN
+                iCurrentItem := LOWER_BOUND(aMessages,1);
+            END_IF
+            iMultiplexState := 10;
+        END_IF
+
 END_CASE
 
 

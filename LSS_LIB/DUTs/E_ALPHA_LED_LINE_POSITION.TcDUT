@@ -6,18 +6,18 @@
 {attribute 'to_string'}
 TYPE E_ALPHA_LED_LINE_POSITION :
 (
-	MIDDLE_LINE := 0 	// — Text centered vertically
-	(*
-	TOP_LINE, 			(*— Text begins on the top line of the sign and the sign will use all its lines minus 1 in order
-						to display the text. For example, a 6-line sign will allow a maximum of 5 lines (6 minus 1) for the Top
-						Position. The Top/Bottom Line break will remain fixed until the next Middle or Fill position is
-						specified*)
-	BOTTOM_LINE, 		(* — The starting position of the Bottom Line(s) immediately follows the last line of the
-						Top Line. For example, a 6-line sign with 3 lines of text associated with the Top Line would start the
-						Bottom Line text on the 4th line of the sign. *)
-						
-	FILL				(*he sign will fill all available lines, centering the lines vertically*)
-	*)
+    MIDDLE_LINE := 0 	// — Text centered vertically
+    (*
+    TOP_LINE, 			(*— Text begins on the top line of the sign and the sign will use all its lines minus 1 in order
+                        to display the text. For example, a 6-line sign will allow a maximum of 5 lines (6 minus 1) for the Top
+                        Position. The Top/Bottom Line break will remain fixed until the next Middle or Fill position is
+                        specified*)
+    BOTTOM_LINE, 		(* — The starting position of the Bottom Line(s) immediately follows the last line of the
+                        Top Line. For example, a 6-line sign with 3 lines of text associated with the Top Line would start the
+                        Bottom Line text on the 4th line of the sign. *)
+
+    FILL				(*he sign will fill all available lines, centering the lines vertically*)
+    *)
 );
 END_TYPE
 ]]></Declaration>

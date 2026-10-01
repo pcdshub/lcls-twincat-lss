@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
   <POU Name="FB_Alpha215C" Id="{bf5a96f5-4bee-4cf1-9220-3934c6995b7d}" SpecialFunc="None">
-    <Declaration><![CDATA[FUNCTION_BLOCK FB_Alpha215C 
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Alpha215C
 (*This FB can be used to send print commands to the ALpha Signs*)
 VAR_INPUT
 END_VAR
@@ -11,61 +11,70 @@ VAR
 	fbBackgroundSerialLine: SerialLineControl;
 	RxBuffer:   ComBuffer;
     TxBuffer:   ComBuffer;
-	
+
 	// Link to hardware.
 	stComIn		AT %I*	:	EL6inData22B (*KL6inData22B*);
     stComOut	AT %Q*	:	EL6outData22B (*KL6outData22B*);
-	
+
 	//sCommand : STRING := '';  // (sCommand = sCommandCode + sDataField) + sCommand // NESTING commands
 	//sSendMessage : STRING := '_00_00_00_00_00_01Z00_02A0_1Ba_1A9_1C1NO ACCESS_04';
-	
+
 	bBackgroundComError: BOOL;
 	bBackgroundErrorId: UINT;
 	bBackgroundTaskRunning : BOOL;
-	
+
 	fbClearComBuffer		: ClearComBuffer;
     fbSendString			: SendString;
     fbReceiveString			: ReceiveString;
-	
+
 	sSendPacket : STRING := '';
-	
+
 	bExecuteSend : BOOL := FALSE;
 	iState : UINT := 0;
-	
+
 	fbRingBuff : FB_StringRingBuffer;
 	fbBufferMemory    : ARRAY[0..2048] OF BYTE;
 	
+	tTimer : TON;
+
 END_VAR
 ]]></Declaration>
     <Implementation>
       <ST><![CDATA[fbRingBuff(pBuffer := ADR(fbBufferMemory), cbBuffer := SIZEOF(fbBufferMemory));
+tTimer(IN:=TRUE, PT:= T#100MS);
 
 CASE iState OF
-	0: 
+	0:
 		IF bExecuteSend THEN // Manual Send
 			fbSendString.SendString := sSendPacket;
 			fbClearComBuffer(Buffer:=TxBuffer);
-			iState := 10; 
+			iState := 10;
 		END_IF
-		
+
 		IF fbRingBuff.nCount > 0 THEN // Send w/ ring buffer
 			fbRingBuff.A_RemoveHead();
 			sSendPacket := fbRingBuff.getValue;
 			fbSendString.SendString := sSendPacket;
 			fbClearComBuffer(Buffer:=TxBuffer);
-			iState := 10; 
+			iState := 10;
 		END_IF
-	
-	10: // SEND PACKET		
-		
+
+	10: // SEND PACKET
+
 		fbSendString(TXbuffer:=TxBuffer);
-		
+
 		IF NOT fbSendString.Busy AND fbSendString.Error = 0 THEN
+			tTimer.IN := FALSE;
+			tTimer();
+			iState := 20;
+		END_IF
+		
+	20: // WAIT FOR NEXT MESSAGE TO SEND
+		IF tTimer.Q THEN
 			bExecuteSend := FALSE;
 			sSendPacket := '';
-			iState := 0; 
+			iState := 0;
 		END_IF
-		
 
 END_CASE]]></ST>
     </Implementation>
@@ -83,8 +92,8 @@ fbBackgroundSerialLine(
     RxBuffer:= RxBuffer,
 	Error => bBackgroundComError,
 	ErrorID => bBackgroundErrorId);
-	
-	
+
+
 	]]></ST>
       </Implementation>
     </Action>
@@ -97,11 +106,11 @@ END_VAR
 VAR
 	sPacket : STRING := '';
 	// TRANSMISSION FORMAT: <NULL> <SOH> <TypeCode> <SignAdress> <STX> <CommandCode> <DataField> <EOT>
-	
+
 	NULL : STRING := '_00_00_00_00_00';	(*A minimum of five <NUL>s (00H) must be transmitted as packet synchronization characters.
 											 Five <SOH>s (01H) may be substituted for the five <NUL>s.
 											 The sign uses these five characters to establish the baud rate *)
-											 
+
 	SOH : STRING := '_01';	// Start of Header
 	TYPE_CODE : STRING := 'Z';	// Set Type of Sign; 'Z' = All signs
 	STX : STRING :='_02'; 		//“Start of TeXt” (02H) character. <STX> always precedes a Command Code.
@@ -112,7 +121,7 @@ END_VAR]]></Declaration>
 sPacket := CONCAT(sPacket, SOH);
 sPacket := CONCAT(sPacket, TYPE_CODE);
 sPacket := CONCAT(sPacket, sAddress);
-sPacket := CONCAT(sPacket, STX); 
+sPacket := CONCAT(sPacket, STX);
 sPacket := CONCAT(sPacket, sCommand);
 sPacket := CONCAT(sPacket, EOT);
 
@@ -125,14 +134,14 @@ VAR_INPUT
 	sMessage : STRING;
 	iFile : STRING := '0'; // print to priotiry file; so message shows up immediatly
 	eLinePos : E_ALPHA_LED_LINE_POSITION := E_ALPHA_LED_LINE_POSITION.MIDDLE_LINE;
-	
+
 END_VAR
 VAR
 	COMMAND_CODE : STRING := 'A'; // A = WRITE TO 'FILE'
 	ESC : STRING := '_1B';
 	LINE_POS : STRING;
 	MODE_CODE : STRING := 'b_1C1'; // func that chains multiple codes? ; Holds Text in place (b); red color text (_1C1) - this can chain multiple codes.
-	SPECIAL_MODE : STRING := ''; // CAN ALSO BE ENUM 
+	SPECIAL_MODE : STRING := ''; // CAN ALSO BE ENUM
 	// A - WRITE
 	// 0 - FILE LABEL ;0 is Prority
 	// _1B - ESCAPE CHAR
@@ -140,13 +149,13 @@ VAR
 	// a - MODE CODE
 	// '' - SPECIAL MODE
 	// _1A9_1C1NO ACCESS - TEXT
-	
+
 	sCommand : STRING;
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[CASE eLinePos OF
 	E_ALPHA_LED_LINE_POSITION.MIDDLE_LINE:
-		LINE_POS := ' ';	
+		LINE_POS := ' ';
 END_CASE
 
 sCommand := CONCAT(sCommand, COMMAND_CODE);
@@ -177,8 +186,7 @@ END_VAR
 sPacket := M_BUILD_PACKET(sCommand, sAddress);
 
 fbRingBuff.putValue := sPacket;
-fbRingBuff.A_AddTail();
-]]></ST>
+fbRingBuff.A_AddTail();]]></ST>
       </Implementation>
     </Method>
   </POU>
